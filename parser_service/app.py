@@ -56,13 +56,21 @@ def _coerce_response(obj: dict) -> ParseResponse:
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    loaded = _get_loaded()
+    # IMPORTANT: /health must be fast and must NOT trigger a model download/load.
+    # The model load is intentionally deferred until the first /parse call.
+    base_model_id = os.getenv(
+        "BASE_MODEL_ID", "unsloth/qwen2.5-3b-instruct-unsloth-bnb-4bit"
+    )
+    adapter_path = os.getenv("ADAPTER_PATH", "")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
     return HealthResponse(
-        model=loaded.base_model_id,
-        adapter_path=loaded.adapter_path,
-        device=loaded.device,
+        model=base_model_id,
+        adapter_path=adapter_path,
+        device=device,
         extra={
             "load_in_4bit": os.getenv("LOAD_IN_4BIT", "true"),
+            "model_loaded": str(_LOADED is not None).lower(),
         },
     )
 
