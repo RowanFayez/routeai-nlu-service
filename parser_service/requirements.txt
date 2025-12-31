@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+transformers>=4.45
+peft>=0.11
+accelerate>=0.33
+sentencepiece>=0.2
+bitsandbytes>=0.43; platform_system != "Windows"
