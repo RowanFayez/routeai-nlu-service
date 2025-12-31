@@ -16,6 +16,8 @@ Schema (all keys must exist):
 Rules:
 - If the user provides only destination (e.g., "وديني سيدي جابر"), set origin to "current_location".
 - If a field is missing, set it to null (except constraints: use []).
+- IMPORTANT: Do NOT invent constraints. Only include constraints that are explicitly requested by the user.
+- If the user did not mention any constraint, constraints MUST be [].
 - constraints should be short tokens like: avoid_tram, avoid_corniche, cheapest, fastest, less_crowded, budget_5_egp.
 - mode examples: tram, bus, train, microbus, microbus_small, walking.
 """

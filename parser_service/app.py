@@ -54,6 +54,72 @@ def _coerce_response(obj: dict) -> ParseResponse:
     )
 
 
+def _filter_constraints_by_query(constraints: list[str], query: str) -> list[str]:
+    """Keep only constraints that the user explicitly asked for.
+
+    This is a safety net against hallucinated constraints (e.g. returning 'cheapest'
+    when the user didn't mention price).
+    """
+
+    if not constraints:
+        return []
+
+    q = (query or "").strip().lower()
+    if not q:
+        return []
+
+    # Supported constraint tokens (keep small + stable; can expand later).
+    allowed = {
+        "cheapest",
+        "fastest",
+        "less_crowded",
+        "avoid_tram",
+        "avoid_corniche",
+        "fewest_transfers",
+        "less_walking",
+    }
+
+    # Keyword triggers (very lightweight). If none match, return [].
+    triggers = {
+        "cheapest": ["cheapest", "cheap", "price", "cost", "ارخص", "أرخص", "رخيص", "اقل فلوس", "أقل فلوس", "بأقل", "باقل"],
+        "fastest": ["fastest", "quick", "asap", "اسرع", "أسرع", "بسرعة", "بسرعه"],
+        "less_crowded": ["less crowded", "not crowded", "crowded", "زحمة", "زحمه", "اقل زحمة", "أقل زحمة"],
+        "avoid_tram": ["avoid tram", "no tram", "ترام", "مترو", "مترو الترام", "من غير ترام", "بدون ترام"],
+        "avoid_corniche": ["avoid corniche", "corniche", "كورنيش", "الكورنيش", "من غير كورنيش", "بدون كورنيش"],
+        "fewest_transfers": ["fewest transfers", "no transfers", "transfer", "تحويل", "تحويلات", "تبديل", "تبديلات", "من غير تحويلات", "بدون تحويلات"],
+        "less_walking": ["less walking", "no walking", "walk", "مشي", "تمشي", "اقل مشي", "أقل مشي", "من غير مشي", "بدون مشي"],
+    }
+
+    matched = set()
+    for token, kws in triggers.items():
+        for kw in kws:
+            if kw.lower() in q:
+                matched.add(token)
+                break
+
+    if not matched:
+        return []
+
+    out: list[str] = []
+    for c in constraints:
+        token = str(c).strip()
+        if not token:
+            continue
+        token_l = token.lower()
+        if token_l in allowed and token_l in matched:
+            out.append(token_l)
+
+    # De-dup while preserving order
+    seen = set()
+    deduped = []
+    for x in out:
+        if x in seen:
+            continue
+        seen.add(x)
+        deduped.append(x)
+    return deduped
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     # IMPORTANT: /health must be fast and must NOT trigger a model download/load.
@@ -120,7 +186,9 @@ def parse(req: ParseRequest) -> ParseResponse:
         decoded = tokenizer.decode(out[0], skip_special_tokens=True)
 
         obj = extract_json_object(decoded)
-        return _coerce_response(obj)
+        resp = _coerce_response(obj)
+        resp.constraints = _filter_constraints_by_query(resp.constraints, req.query)
+        return resp
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"parse_failed: {e}")
